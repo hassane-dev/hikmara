@@ -1,0 +1,5 @@
+policies:
+  require_consent_for_execution: true
+  require_consent_for_dependency: true
+  require_consent_for_file_write: false
+  encryption_algorithm: "Fernet"
