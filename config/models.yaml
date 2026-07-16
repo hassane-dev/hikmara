@@ -1,0 +1,9 @@
+llm:
+  default_model: "qwen-1.5b-chat-gguf"
+  allowed_fallback: true
+embeddings:
+  default_model: "all-MiniLM-L6-v2"
+vision:
+  default_model: "local-opencv-yolov8"
+audio:
+  default_model: "whisper-tiny-en"

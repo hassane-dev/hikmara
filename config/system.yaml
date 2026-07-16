@@ -1,0 +1,6 @@
+system:
+  name: "Hikmara AI"
+  version: "0.1.0"
+  log_level: "INFO"
+  offline_mode: true
+  debug: true

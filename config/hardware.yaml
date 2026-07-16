@@ -1,0 +1,8 @@
+profiles:
+  selected: "Standard"
+  Standard:
+    max_cores: 4
+    allow_gpu: true
+  Minimal:
+    max_cores: 2
+    allow_gpu: false
