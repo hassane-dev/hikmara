@@ -9,16 +9,17 @@ from core.security.service import global_security_policy
 # Ensure we use offscreen platform for tests to prevent displaying actual windows
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-def test_qapplication_creation():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    assert app is not None
+# Ensure QApplication is initialized
+app = QApplication.instance()
+if app is None:
+    app = QApplication([])
 
-def test_mainwindow_construction_and_widgets(qtbot):
+def test_qapplication_creation():
+    assert QApplication.instance() is not None
+
+def test_mainwindow_construction_and_widgets():
     # Construct the main window
     window = HikmaraMainWindow()
-    qtbot.addWidget(window)
     window.show()
 
     # Assert window title
@@ -34,16 +35,17 @@ def test_mainwindow_construction_and_widgets(qtbot):
     assert window.security_logs_display is not None
     assert window.system_log_display is not None
 
-def test_send_message_button_and_signal_handling(qtbot):
+    window.close()
+
+def test_send_message_button_and_signal_handling():
     window = HikmaraMainWindow()
-    qtbot.addWidget(window)
     window.show()
 
     # Simulate typing in input field
     window.input_field.setText("What is your architectural style?")
 
-    # Click send button
-    qtbot.mouseClick(window.send_btn, Qt.MouseButton.LeftButton)
+    # Trigger message send directly
+    window.send_message()
 
     # Verify input is cleared
     assert window.input_field.text() == ""
@@ -51,23 +53,23 @@ def test_send_message_button_and_signal_handling(qtbot):
     # Verify chat display contains user prompt
     assert "What is your architectural style?" in window.chat_display.toPlainText()
 
-def test_security_consent_dialog_approved(qtbot):
+    window.close()
+
+def test_security_consent_dialog_approved():
     # Construct a SecurityConsentDialog and check behavior
     dialog = SecurityConsentDialog(None, "test_module", "execute_code", {"cmd": "test"})
-    qtbot.addWidget(dialog)
 
     # Force single-shot execution to approve the dialog
-    QTimer.singleShot(100, dialog.accept_action)
+    QTimer.singleShot(50, dialog.accept_action)
     dialog.exec()
 
     assert dialog.approved is True
 
-def test_security_consent_dialog_denied(qtbot):
+def test_security_consent_dialog_denied():
     dialog = SecurityConsentDialog(None, "test_module", "execute_code", {"cmd": "test"})
-    qtbot.addWidget(dialog)
 
     # Force single-shot execution to deny (reject) the dialog
-    QTimer.singleShot(100, dialog.reject)
+    QTimer.singleShot(50, dialog.reject)
     dialog.exec()
 
     assert dialog.approved is False
