@@ -66,7 +66,7 @@ env.bak/
 venv.bak/
 
 # Project-specific local storage/database files
-database/hikmara.db
+database/*.db
 logs/
 cache/
 temporary/

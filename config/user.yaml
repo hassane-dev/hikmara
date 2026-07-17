@@ -1,4 +1,5 @@
+test_key: null
 user:
-  username: "admin"
-  full_name: "Hikmara Administrator"
-  role: "super_user"
+  full_name: Hikmara Administrator
+  role: super_user
+  username: admin
