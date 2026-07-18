@@ -82,6 +82,10 @@ class HikmaraMainWindow(QMainWindow):
         self.sim_offline_cb.setChecked(True)
         offline_group_layout.addWidget(self.sim_offline_cb)
 
+        self.dev_mode_cb = QCheckBox("Mode Développeur (Developer Mode)")
+        self.dev_mode_cb.setChecked(False)
+        offline_group_layout.addWidget(self.dev_mode_cb)
+
         self.offline_badge = QLabel("OFFLINE MODE: ACTIVE (100% Local, Zero Cloud APIs, No GPU Required)")
         self.offline_badge.setWordWrap(True)
         self.offline_badge.setStyleSheet("color: green; font-weight: bold;")
@@ -248,25 +252,43 @@ class HikmaraMainWindow(QMainWindow):
         self.update_tasks_ui()
 
         try:
-            # Let's execute using global_agent_manager (cognition orchestrator)
+            # Execute using global_agent_manager
             res = global_agent_manager.execute_task(prompt, {})
 
-            # Print details in conversation zone
-            self.chat_display.append(f"<b>Hikmara AI Manager:</b> Orchestration completed successfully.")
+            # 1. In Developer Mode, display comprehensive routing/technical logs
+            if self.dev_mode_cb.isChecked():
+                self.chat_display.append("<font color='#7289da'><b>[DEVELOPER PANEL]</b></font>")
+                self.chat_display.append(f"• <b>Décision du routeur :</b> Intention '{res.get('route_decision')}'")
+                self.chat_display.append(f"• <b>Pipeline sélectionné :</b> {res.get('recommended_pipeline')}")
+                self.chat_display.append(f"• <b>Justification :</b> {res.get('justification')}")
 
-            # If agent answers are dictionaries, pull response or display them nicely
-            arch_blueprint = res.get("architecture", {}).get("blueprint", "N/A")
-            self.chat_display.append(f"• <b>Architect Agent:</b> Designed blueprint: <i>{arch_blueprint}</i>")
+                agents_used = res.get("agents_used", [])
+                agents_str = ", ".join(agents_used) if agents_used else "Aucun (traitement direct)"
+                self.chat_display.append(f"• <b>Agents exécutés :</b> {agents_str}")
 
-            prog_code = res.get("code", {}).get("code", "N/A")
-            self.chat_display.append(f"• <b>Programmer Agent:</b> Authored code. Execution status: <i>Success</i>")
+                if res.get("event_trail"):
+                    self.chat_display.append(f"• <b>Événement interne :</b> {res.get('event_trail')}")
 
-            if res.get("event_trail"):
-                self.chat_display.append(f"<i>Event Trail: {res['event_trail']}</i>")
+                stats = res.get("execution_stats", {})
+                self.chat_display.append(
+                    f"• <b>Temps d'exécution :</b> {stats.get('execution_time_seconds', 0)} secondes<br/>"
+                    f"• <b>Utilisation CPU :</b> {stats.get('cpu_percent', 0)}%<br/>"
+                    f"• <b>Utilisation RAM :</b> {stats.get('ram_percent', 0)}%"
+                )
+                self.chat_display.append("<font color='#7289da'><b>[END DEVELOPER PANEL]</b></font><br/>")
 
-            # Direct LLM output simulation
-            llm_response = self.llm.predict({"prompt": prompt}).get("response", "")
-            self.chat_display.append(f"<b>LLM Predict Engine:</b> {llm_response}")
+            # 2. Display the main reply depending on orchestration flow
+            if res.get("orchestrated"):
+                self.chat_display.append(f"<b>Hikmara AI Manager:</b> Orchestration completed successfully.")
+
+                arch_blueprint = res.get("architecture", {}).get("blueprint", "N/A")
+                self.chat_display.append(f"• <b>Architect Agent:</b> Designed blueprint: <i>{arch_blueprint}</i>")
+
+                prog_code = res.get("code", {}).get("code", "N/A")
+                self.chat_display.append(f"• <b>Programmer Agent:</b> Authored code. Execution status: <i>Success</i>")
+            else:
+                response_text = res.get("response", "")
+                self.chat_display.append(f"<b>Hikmara AI:</b> {response_text}")
 
             # Update the task state as completed
             global_task_manager.update_task_status(task_id, "completed", progress=100, results=res)
