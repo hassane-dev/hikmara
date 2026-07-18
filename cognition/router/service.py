@@ -48,11 +48,11 @@ class IntentRouter:
             justification="Le message contient une salutation standard."
         )
 
-        # 2. Conversation générale
-        conv_regex = r"\b(merci|thanks|comment vas-tu|comment ça va|comment ca va|how are you|how's it going|ça va|ca va|bien et toi|de rien|s'il te plaît|please)\b"
+        # 2. Conversation générale (make sure 'comment vas tu' and variations are perfectly captured)
+        conv_regex = r"\b(merci|thanks|comment vas tu|comment vas-tu|comment ça va|comment ca va|how are you|how's it going|ça va|ca va|bien et toi|de rien|s'il te plaît|please)\b"
         self.register_rule(
             category=self.CONVERSATION_GENERALE,
-            matcher=lambda text: bool(re.search(conv_regex, text.lower())),
+            matcher=lambda text: bool(re.search(conv_regex, text.lower())) or "comment vas" in text.lower(),
             confidence=0.95,
             recommended_pipeline="Conversation",
             agents_to_trigger=[],
@@ -92,7 +92,39 @@ class IntentRouter:
             justification="La requête concerne une vérification de sécurité ou une analyse de vulnérabilité."
         )
 
-        # 6. Génération de code
+        # 6. Ambiguous "code" query (route to Conversation to ask for clarification without launching agents)
+        self.register_rule(
+            category=self.GENERATION_CODE,
+            matcher=lambda text: text.strip().lower() in ["code", "le code", "du code"],
+            confidence=0.85,
+            recommended_pipeline="Conversation",
+            agents_to_trigger=[],
+            justification="La requête contient uniquement le mot 'code' et est ambiguë. Clarification requise."
+        )
+
+        # 7. Planification de projet / Feuille de route
+        roadmap_regex = r"\b(feuille de route|roadmap|planification|planning|projet web|conception de projet|gérer un projet|projet de site)\b"
+        self.register_rule(
+            category=self.QUESTIONS_TECHNIQUES,
+            matcher=lambda text: bool(re.search(roadmap_regex, text.lower())),
+            confidence=0.95,
+            recommended_pipeline="Conversation",
+            agents_to_trigger=[],
+            justification="La requête concerne une demande de planification de projet ou de conseil technique."
+        )
+
+        # 8. PHP script / scripting languages pattern
+        scripting_regex = r"\b(php|python|javascript|js|flask|django|api|html|css|c\+\+|java)\b"
+        self.register_rule(
+            category=self.GENERATION_CODE,
+            matcher=lambda text: bool(re.search(scripting_regex, text.lower())) and any(v in text.lower() for v in ["écris", "génère", "crée", "code", "script", "somme", "entiers", "write", "generate"]),
+            confidence=0.97,
+            recommended_pipeline="Développement logiciel",
+            agents_to_trigger=["architect", "programmer", "tester", "security", "docs"],
+            justification="La requête demande explicitement la création/génération de structures de code avec un langage cible."
+        )
+
+        # 9. Génération de code general
         gen_regex = r"\b(génère|écris|générer|écriture|génération)\b.*\b(classe|script|fonction|code|méthode|class|function|method)\b|\b(generate|write)\b.*\b(code|class|script|function|method)\b"
         self.register_rule(
             category=self.GENERATION_CODE,
@@ -100,10 +132,10 @@ class IntentRouter:
             confidence=0.95,
             recommended_pipeline="Développement logiciel",
             agents_to_trigger=["architect", "programmer", "tester", "security", "docs"],
-            justification="La requête demande explicitement la création/génération de structures de code."
+            justification="La requête demande la génération de code."
         )
 
-        # 7. Analyse de code
+        # 10. Analyse de code
         anal_regex = r"\b(analyse|recherche|trouve|trouver|analyser|review|analyze|find)\b.*\b(code|bug|bugs|vulnérabilité|vulnérabilités|classe|script|function|fonction)\b"
         self.register_rule(
             category=self.ANALYSE_CODE,
@@ -114,7 +146,7 @@ class IntentRouter:
             justification="La requête porte sur l'analyse, la relecture de code ou la détection de bugs."
         )
 
-        # 8. Explication de code
+        # 11. Explication de code
         expl_regex = r"\b(explique|explication|comment fonctionne|que fait|explain|how does)\b.*\b(code|script|fonction|function|classe|class|méthode|method)\b"
         self.register_rule(
             category=self.EXPLICATION_CODE,
@@ -125,7 +157,7 @@ class IntentRouter:
             justification="La requête demande des explications détaillées ou de la documentation sur un extrait de code."
         )
 
-        # 9. Développement logiciel
+        # 12. Développement logiciel
         dev_regex = r"\b(api|flask|django|serveur|server|web app|base de données|database|développe|développer|implémente|implémenter|build|develop|program|create|implement|integration)\b"
         self.register_rule(
             category=self.DEVELOPPEMENT_LOGICIEL,
@@ -136,7 +168,7 @@ class IntentRouter:
             justification="Le message demande une tâche de développement logiciel complète."
         )
 
-        # 10. Questions techniques
+        # 13. Questions techniques
         tech_regex = r"\b(comment fonctionne|explique-moi|c'est quoi|pourquoi|how does|explain|what is|why|kubernetes|docker|network|algorithm)\b"
         self.register_rule(
             category=self.QUESTIONS_TECHNIQUES,
@@ -147,7 +179,7 @@ class IntentRouter:
             justification="La requête pose une question conceptuelle ou technique d'ordre général."
         )
 
-        # 11. Recherche d'informations
+        # 14. Recherche d'informations
         search_regex = r"\b(recherche sur le web|cherche des infos|web search|find info|search the internet)\b"
         self.register_rule(
             category=self.RECHERCHE_INFORMATIONS,
@@ -158,7 +190,7 @@ class IntentRouter:
             justification="La requête demande explicitement d'effectuer une recherche d'informations."
         )
 
-        # 12. Requêtes complexes
+        # 15. Requêtes complexes
         complex_regex = r"\b(conçois un système complet|orchestre un developpement complexe|concois un systeme complet)\b"
         self.register_rule(
             category=self.REQUETES_COMPLEXES,

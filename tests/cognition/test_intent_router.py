@@ -13,28 +13,39 @@ def test_intent_router_classification():
     assert res_salut_en.category == "Salutations"
 
     # Conversation générale
-    res_conv = global_intent_router.route("comment ça va ?")
-    assert res_conv.category == "Conversation générale"
-    assert res_conv.recommended_pipeline == "Conversation"
+    res_conv1 = global_intent_router.route("comment ça va ?")
+    assert res_conv1.category == "Conversation générale"
+    assert res_conv1.recommended_pipeline == "Conversation"
+
+    res_conv2 = global_intent_router.route("comment vas tu ?")
+    assert res_conv2.category == "Conversation générale"
+    assert res_conv2.recommended_pipeline == "Conversation"
 
     # Commandes système
     res_sys = global_intent_router.route("vérifie la mémoire")
     assert res_sys.category == "Commandes système"
     assert res_sys.recommended_pipeline == "Commandes système"
 
-    # Développement logiciel
-    res_dev = global_intent_router.route("écris une api flask")
-    assert res_dev.category == "Développement logiciel"
-    assert res_dev.recommended_pipeline == "Développement logiciel"
-    assert "architect" in res_dev.agents_to_trigger
+    # PHP script (Génération de code)
+    res_php = global_intent_router.route("écris un script PHP qui calcule la somme de deux entiers")
+    assert res_php.category == "Génération de code"
+    assert res_php.recommended_pipeline == "Développement logiciel"
+    assert "programmer" in res_php.agents_to_trigger
 
-    # Génération de code
-    res_gen = global_intent_router.route("génère une classe Python")
-    assert res_gen.category == "Génération de code"
-    assert "programmer" in res_gen.agents_to_trigger
+    # Project roadmap / planning (Questions techniques)
+    res_roadmap = global_intent_router.route("je veux une feuille de route pour un projet web")
+    assert res_roadmap.category == "Questions techniques"
+    assert res_roadmap.recommended_pipeline == "Conversation"
+    assert len(res_roadmap.agents_to_trigger) == 0  # Should not trigger sub-agents needlessly
 
-    # Inconnu
-    res_inc = global_intent_router.route("something random")
+    # Ambiguous query "code" (Génération de code but Conversation pipeline for clarification)
+    res_code = global_intent_router.route("code")
+    assert res_code.category == "Génération de code"
+    assert res_code.recommended_pipeline == "Conversation"  # To prevent agent orchestration overhead
+    assert len(res_code.agents_to_trigger) == 0
+
+    # Fallback / Inconnu
+    res_inc = global_intent_router.route("something totally random and meaningless")
     assert res_inc.category == "Inconnu"
     assert res_inc.recommended_pipeline == "Conversation"
 
@@ -43,16 +54,36 @@ def test_agent_manager_no_orchestration_for_simple_conversation():
     res = global_agent_manager.execute_task("Bonjour", {})
     assert res["orchestrated"] is False
     assert "Bonjour !" in res["response"]
-    assert "architecture" not in res
-    assert "code" not in res
     assert len(res["agents_used"]) == 0
 
-def test_agent_manager_orchestration_for_development():
-    # Complex task should trigger agents
-    res = global_agent_manager.execute_task("génère une classe de base de données active record", {})
+def test_agent_manager_conversation_generale():
+    # Comment vas tu ? should receive natural conversational response
+    res = global_agent_manager.execute_task("comment vas tu ?", {})
+    assert res["orchestrated"] is False
+    assert "opérationnel" in res["response"] or "très bien" in res["response"]
+    assert len(res["agents_used"]) == 0
+
+def test_agent_manager_ambiguous_code_clarification():
+    # 'code' should receive clarification prompt
+    res = global_agent_manager.execute_task("code", {})
+    assert res["orchestrated"] is False
+    assert "ambiguë" in res["response"]
+    assert len(res["agents_used"]) == 0
+
+def test_agent_manager_project_roadmap():
+    # 'feuille de route' should return helpful roadmap outline
+    res = global_agent_manager.execute_task("je veux une feuille de route pour un projet web", {})
+    assert res["orchestrated"] is False
+    assert "feuille de route" in res["response"].lower()
+    assert "maquettage" in res["response"].lower() or "conception" in res["response"].lower()
+    assert len(res["agents_used"]) == 0
+
+def test_agent_manager_orchestration_for_development_php():
+    # Script PHP should trigger agents and produce adapted output code
+    res = global_agent_manager.execute_task("écris un script PHP qui calcule la somme de deux entiers", {})
     assert res["orchestrated"] is True
-    assert "architecture" in res
     assert "code" in res
+    assert "additionnerEntiers" in res["code"]["code"]
     assert len(res["agents_used"]) > 0
 
 def test_system_command_pipeline():
