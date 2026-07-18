@@ -1,6 +1,6 @@
 import re
 from typing import List, Callable, Dict, Any
-from cognition.router.models import IntentResult
+from cognition.router.models import RoutingDecision, IntentResult
 
 class RoutingRule:
     def __init__(self, category: str, matcher: Callable[[str], bool], confidence: float, recommended_pipeline: str, agents_to_trigger: List[str], justification: str):
@@ -93,7 +93,7 @@ class IntentRouter:
         )
 
         # 6. Génération de code
-        gen_regex = r"\b(génère|écris|générer|écriture|génération)\b.*\b(classe|script|fonction|code|méthode|class|function|method)\b|\b(generate|write)\b.*\b(code|class|script|function|method)\b"
+        gen_regex = r"\b(génère|écris|générer|écriture|génération)\b.*\b(classe|script|fonction|code|méthode|class|function|method|programme|program)\b|\b(generate|write)\b.*\b(code|class|script|function|method|programme|program)\b"
         self.register_rule(
             category=self.GENERATION_CODE,
             matcher=lambda text: bool(re.search(gen_regex, text.lower())),
@@ -169,27 +169,144 @@ class IntentRouter:
             justification="La requête exige une orchestration multi-agents avancée pour concevoir un système complet."
         )
 
-    def route(self, prompt: str) -> IntentResult:
-        """Analyzes a user prompt and returns a structured IntentResult."""
+    def route(self, prompt: str) -> RoutingDecision:
+        """Analyzes a user prompt and returns a structured RoutingDecision."""
         clean_prompt = prompt.strip()
-        # Evaluate registered rules
+        prompt_lower = clean_prompt.lower()
+
+        # Find the matched rule
+        matched_rule = None
         for rule in self._rules:
             if rule.matcher(clean_prompt):
-                return IntentResult(
-                    category=rule.category,
-                    confidence=rule.confidence,
-                    recommended_pipeline=rule.recommended_pipeline,
-                    agents_to_trigger=rule.agents_to_trigger,
-                    justification=rule.justification
-                )
+                matched_rule = rule
+                break
 
-        # Fallback for unknown / general queries
-        return IntentResult(
-            category=self.INCONNU,
-            confidence=0.5,
-            recommended_pipeline="Conversation",
-            agents_to_trigger=[],
-            justification="Aucun motif spécifique détecté. Pipeline de conversation par défaut sélectionné."
+        # If no rule matched, use fallback rule values
+        if matched_rule is None:
+            intent = self.INCONNU
+            confidence = 0.5
+            rule_pipeline = "Conversation"
+            agents_to_trigger = []
+            justification = "Aucun motif spécifique détecté. Pipeline de conversation par défaut sélectionné."
+        else:
+            intent = matched_rule.category
+            confidence = matched_rule.confidence
+            rule_pipeline = matched_rule.recommended_pipeline
+            agents_to_trigger = matched_rule.agents_to_trigger
+            justification = matched_rule.justification
+
+        # 1. Detect language
+        fr_words = ["bonjour", "salut", "comment", "écris", "génère", "analyse", "explique", "sécurité", "qui", "pourquoi", "système", "mémoire", "est", "une", "des", "les", "du", "un", "le", "la", "feuille de route"]
+        en_words = ["hello", "hi", "how", "write", "generate", "analyze", "explain", "security", "why", "system", "memory", "is", "a", "an", "the", "of", "to", "it", "roadmap"]
+        fr_score = sum(1 for w in fr_words if re.search(r"\b" + re.escape(w) + r"\b", prompt_lower))
+        en_score = sum(1 for w in en_words if re.search(r"\b" + re.escape(w) + r"\b", prompt_lower))
+        language = "fr" if fr_score >= en_score else "en"
+
+        # 2. Detect domain
+        if "python" in prompt_lower:
+            domain = "python"
+        elif "php" in prompt_lower:
+            domain = "php"
+        elif "api" in prompt_lower or "rest" in prompt_lower:
+            domain = "api"
+        elif any(k in prompt_lower for k in ["base de données", "database", "sql", "sqlite", "mysql", "postgres"]):
+            domain = "database"
+        elif any(k in prompt_lower for k in ["sécurité", "security", "vulnérabilité", "vulnerability", "policy check", "audit"]):
+            domain = "security"
+        elif any(k in prompt_lower for k in ["mémoire", "memory", "cpu", "ram", "metrics", "modules", "module", "logs", "log", "système", "system"]):
+            domain = "system"
+        elif any(k in prompt_lower for k in ["outil", "outils", "tool", "tools", "pip", "npm", "package", "dependency"]):
+            domain = "tools"
+        elif intent in [self.SALUTATIONS, self.CONVERSATION_GENERALE]:
+            domain = "conversation"
+        elif any(k in prompt_lower for k in ["expliquer", "explique", "explain", "what is", "c'est quoi"]):
+            domain = "education"
+        else:
+            domain = "general"
+
+        # 3. Detect complexity and simple coding status
+        simple_coding_keywords = [
+            "somme", "addition", "additionne", "calculer la somme", "somme de deux entiers", "hello world", "simple",
+            "add two numbers", "sum of two integers", "simple function"
+        ]
+        is_simple_coding = any(k in prompt_lower for k in simple_coding_keywords)
+        is_complex_prompt = any(k in prompt_lower for k in [
+            "analyse mon projet", "identifie les problèmes", "corrige-les", "écris les tests", "conçois un système complet",
+            "analyse tout mon projet", "corrige les problèmes de sécurité", "orchestre un developpement complexe"
+        ])
+
+        if intent in [self.SALUTATIONS, self.CONVERSATION_GENERALE] or prompt_lower in ["bonjour", "salut", "merci", "thanks", "hello", "greetings"]:
+            complexity = "trivial"
+        elif is_complex_prompt or intent == self.REQUETES_COMPLEXES:
+            complexity = "complex"
+        elif any(k in prompt_lower for k in ["critique", "critical", "production", "crash"]):
+            complexity = "critical"
+        elif is_simple_coding:
+            complexity = "simple"
+        else:
+            # Code generation or software development without simple math goes to complex/moderate
+            if intent in [self.GENERATION_CODE, self.DEVELOPPEMENT_LOGICIEL, self.ANALYSE_CODE, self.SECURITE]:
+                complexity = "complex"
+            else:
+                complexity = "moderate"
+
+        # 4. Check if we need agents, tools, memory, local model
+        requires_tools = any(k in prompt_lower for k in ["pip", "npm", "package", "dependency", "installe", "outil", "tool", "file", "fichier", "analyse mon projet", "tests", "run", "exécute", "execute"])
+
+        if complexity in ["trivial", "simple"]:
+            requires_agents = False
+            actual_agents_to_trigger = []
+        elif is_complex_prompt:
+            intent = self.DEVELOPPEMENT_LOGICIEL
+            requires_agents = True
+            actual_agents_to_trigger = ["architect", "programmer", "tester", "security", "docs"]
+        else:
+            requires_agents = len(agents_to_trigger) > 0 or complexity in ["complex", "critical"]
+            actual_agents_to_trigger = agents_to_trigger
+
+        requires_model = intent in [
+            self.SALUTATIONS, self.CONVERSATION_GENERALE, self.GENERATION_CODE, self.ANALYSE_CODE,
+            self.EXPLICATION_CODE, self.DEVELOPPEMENT_LOGICIEL, self.QUESTIONS_TECHNIQUES,
+            self.REQUETES_COMPLEXES, self.INCONNU, self.SECURITE
+        ]
+
+        requires_memory = intent in [
+            self.SALUTATIONS, self.CONVERSATION_GENERALE, self.GENERATION_CODE,
+            self.EXPLICATION_CODE, self.ANALYSE_CODE, self.DEVELOPPEMENT_LOGICIEL,
+            self.REQUETES_COMPLEXES, self.INCONNU, self.SECURITE
+        ] or "précédent" in prompt_lower or "previous" in prompt_lower
+
+        sensitive_keywords = ["execute", "run", "exécute", "install", "installe", "supprime", "delete", "format", "write", "modifier", "modify", "crée un fichier", "create file"]
+        safety_level = "sensitive" if any(k in prompt_lower for k in sensitive_keywords) else "normal"
+
+        # 5. Pipeline selection
+        if complexity == "trivial":
+            pipeline = "direct_conversation"
+        elif requires_agents:
+            pipeline = "agent_task"
+        elif intent == self.COMMANDES_SYSTEME:
+            pipeline = "system_commands"
+        elif intent == self.GESTION_OUTILS:
+            pipeline = "tools"
+        elif intent in [self.GENERATION_CODE, self.DEVELOPPEMENT_LOGICIEL, self.EXPLICATION_CODE, self.ANALYSE_CODE] and complexity == "simple":
+            pipeline = "coding_conversation"
+        else:
+            pipeline = "conversation"
+
+        return RoutingDecision(
+            intent=intent,
+            domain=domain,
+            complexity=complexity,
+            language=language,
+            pipeline=pipeline,
+            requires_model=requires_model,
+            requires_tools=requires_tools,
+            requires_agents=requires_agents,
+            requires_memory=requires_memory,
+            safety_level=safety_level,
+            agents_to_trigger=actual_agents_to_trigger,
+            justification=justification,
+            confidence=confidence
         )
 
 global_intent_router = IntentRouter()
