@@ -8,6 +8,7 @@ from cognition.agents.security.service import SecurityAgent
 from cognition.agents.documentation.service import DocumentationAgent
 from cognition.agent_communication.service import global_agent_comm_bus
 from cognition.router.service import global_intent_router
+from cognition.understanding.service import global_language_understanding
 from cognition.context.service import global_context_manager
 from cognition.conversation.service import global_conversation_engine
 from core.security.service import global_security_policy
@@ -35,23 +36,25 @@ class AgentManager(BaseAgent):
     def execute_task(self, task, context):
         start_time = time.time()
 
-        # 1. Route the intent with Phase 2 structured RoutingDecision
+        # 1. Run Language Understanding Layer analysis (Phase 2.5)
+        nlu = global_language_understanding.analyze(task)
+
+        # 2. Route the intent with Phase 2.5 NLU-enhanced RoutingDecision
         intent = global_intent_router.route(task)
 
-        # 2. Update conversation context (Cognition Layer)
-        global_context_manager.update_context("user", task, routing_decision=intent)
+        # 3. Update conversation context (Cognition Layer)
+        global_context_manager.update_context("user", task, routing_decision=intent, nlu_result=nlu)
 
         # Get system resource usage at start
         metrics_start = global_resource_monitor.get_metrics()
 
-        # 3. Execution Pipeline Selection based on routing decision
+        # 4. Execution Pipeline Selection based on routing decision
         if intent.pipeline in ["direct_conversation", "conversation", "coding_conversation"]:
             # Route to our high-level contextual ConversationEngine
             conv_res = global_conversation_engine.generate_response(task)
             response_text = conv_res.response
 
-            # Update assistant response in context
-            global_context_manager.update_context("assistant", response_text)
+            # Note: ConversationEngine.generate_response internally updates assistant context
 
             execution_time = time.time() - start_time
             metrics_end = global_resource_monitor.get_metrics()

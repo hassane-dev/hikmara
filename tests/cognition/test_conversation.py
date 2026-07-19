@@ -12,17 +12,43 @@ def test_french_conversation():
     res = global_conversation_engine.generate_response("Bonjour")
     assert "Comment puis-je vous aider" in res.response
 
-def test_contextual_followup():
+def test_progressive_contextual_generation_flow():
+    # Reset context first
     global_context_manager.reset_context()
-    # Turn 1: request coding
-    res1 = global_conversation_engine.generate_response("Écris-moi un programme Python pour faire la somme de deux entiers.")
+
+    # 1. Step 1: Request simple coding sum program
+    res1 = global_conversation_engine.generate_response("Je veux un programme Python pour additionner deux entiers.")
     assert "calculer_somme" in res1.response
 
-    # Context should be updated with python domain and last code
     ctx = global_context_manager.get_context()
     assert ctx.active_domain == "python"
-    assert "last_generated_code" in ctx.context_references
+    assert ctx.context_references.get("has_gui") is not True
+    assert ctx.context_references.get("has_sqlite") is not True
 
-    # Turn 2: request follow up GUI
-    res2 = global_conversation_engine.generate_response("Ajoute maintenant une interface graphique.")
+    # 2. Step 2: Request GUI modification
+    res2 = global_conversation_engine.generate_response("Ajoute une interface graphique.")
     assert "PyQt6" in res2.response or "QApplication" in res2.response
+
+    ctx = global_context_manager.get_context()
+    assert ctx.active_domain == "python"
+    assert ctx.context_references.get("has_gui") is True
+    assert ctx.context_references.get("has_sqlite") is not True
+
+    # 3. Step 3: Request SQLite database modification
+    res3 = global_conversation_engine.generate_response("Modifie le programme précédent pour ajouter une base SQLite.")
+    assert "sqlite3" in res3.response or "SQLite" in res3.response
+    assert "PyQt6" in res3.response or "QApplication" in res3.response
+
+    ctx = global_context_manager.get_context()
+    assert ctx.active_domain == "python"
+    assert ctx.context_references.get("has_gui") is True
+    assert ctx.context_references.get("has_sqlite") is True
+
+    # 4. Step 4: Request Conversion to PHP (retaining SQLite logic)
+    res4 = global_conversation_engine.generate_response("Convertis le programme précédent en PHP.")
+    assert "<?php" in res4.response
+    assert "SQLite" in res4.response or "sqlite" in res4.response
+
+    ctx = global_context_manager.get_context()
+    assert ctx.active_domain == "php"
+    assert ctx.context_references.get("has_sqlite") is True
