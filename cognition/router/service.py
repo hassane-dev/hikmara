@@ -1,7 +1,7 @@
 import re
 from typing import List, Callable, Dict, Any
 from cognition.router.models import RoutingDecision, IntentResult
-from cognition.understanding.service import global_language_understanding
+from cognition.nlu.service import global_language_understanding
 from cognition.context.service import global_context_manager
 from cognition.router.tool_router import global_tool_router
 from cognition.router.agent_router import global_agent_router

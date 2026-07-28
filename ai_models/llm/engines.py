@@ -2,8 +2,10 @@ import urllib.request
 import json
 import yaml
 import os
-from typing import List, Dict, Any
+import time
+from typing import List, Dict, Any, Iterator
 from ai_models.llm.base import BaseLLM
+from ai_models.llm.models import LLMResponse, ToolCall, ToolResult
 
 class OllamaEngine(BaseLLM):
     def __init__(self, model_name: str, config: Dict[str, Any] = None):
@@ -11,12 +13,12 @@ class OllamaEngine(BaseLLM):
         self.endpoint = "http://localhost:11434"
         self.is_running = False
 
-    def load(self) -> bool:
+    def load_model(self) -> bool:
         self.is_running = self.check_connection()
         self.loaded = True
         return True
 
-    def unload(self) -> bool:
+    def unload_model(self) -> bool:
         self.loaded = False
         return True
 
@@ -28,7 +30,7 @@ class OllamaEngine(BaseLLM):
         except Exception:
             return False
 
-    def get_available_models(self) -> List[str]:
+    def list_models(self) -> List[str]:
         """Fetches models from Ollama or returns default list if Ollama is offline."""
         if self.check_connection():
             try:
@@ -40,9 +42,11 @@ class OllamaEngine(BaseLLM):
         # Fallback preset list when running locally offline / without local Ollama daemon
         return ["qwen2.5:3b", "llama3:8b", "mistral:7b", "phi3:3.8b", "gemma:2b", "deepseek-coder:1.5b"]
 
-    def predict(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        prompt = inputs.get("prompt", "")
-        system = self.config.get("system_prompt", "Vous êtes Hikmara AI.")
+    def get_available_models(self) -> List[str]:
+        return self.list_models()
+
+    def generate(self, prompt: str, system: str = "") -> LLMResponse:
+        start_time = time.time()
 
         # If Ollama daemon is running, try to generate a real prediction
         if self.check_connection():
@@ -64,56 +68,131 @@ class OllamaEngine(BaseLLM):
                 )
                 with urllib.request.urlopen(req, timeout=10.0) as response:
                     res_data = json.loads(response.read().decode())
-                    return {"response": res_data.get("response", ""), "model": self.model_name}
+                    text = res_data.get("response", "")
+                    latency = time.time() - start_time
+                    return LLMResponse(
+                        text=text,
+                        markdown=text,
+                        latency=round(latency, 4),
+                        model=self.model_name,
+                        tokens_input=len(prompt) // 4,
+                        tokens_output=len(text) // 4,
+                        finish_reason="stop"
+                    )
             except Exception:
                 pass
 
-        # Local Offline Simulation fallback
-        # Let's return a nice simulation response indicating offline status
-        return {
-            "response": f"En tant qu'assistant local Hikmara AI, j'ai bien pris note de votre demande concernant '{prompt}'.",
-            "model": self.model_name,
-            "simulated": True
-        }
+        # Offline Mock Fallback Simulation
+        latency = time.time() - start_time
+        sim_response = f"En tant qu'assistant local Hikmara AI, j'ai bien pris note de votre demande : '{prompt}'."
+        return LLMResponse(
+            text=sim_response,
+            markdown=sim_response,
+            latency=round(latency, 4),
+            model=self.model_name,
+            tokens_input=len(prompt) // 4,
+            tokens_output=len(sim_response) // 4,
+            finish_reason="stop",
+            metadata={"simulated": True}
+        )
+
+    def generate_stream(self, prompt: str, system: str = "") -> Iterator[LLMResponse]:
+        # Return generator containing single complete response (minimal streaming)
+        yield self.generate(prompt, system)
+
+    def health_check(self) -> bool:
+        return self.check_connection()
+
+    def switch_model(self, model_name: str) -> bool:
+        self.model_name = model_name
+        return True
+
+    def supports_streaming(self) -> bool:
+        return True
+
+    def supports_tools(self) -> bool:
+        return False
 
 
 class TransformersEngine(BaseLLM):
-    def load(self) -> bool:
+    def load_model(self) -> bool:
         self.loaded = True
         return True
-    def unload(self) -> bool:
+    def unload_model(self) -> bool:
         self.loaded = False
         return True
-    def predict(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        return {"response": f"[Transformers Simulation] {inputs.get('prompt')}", "model": self.model_name}
-    def get_available_models(self) -> List[str]:
+    def generate(self, prompt: str, system: str = "") -> LLMResponse:
+        reply = f"[Transformers HF Simulation] {prompt}"
+        return LLMResponse(text=reply, markdown=reply, model=self.model_name)
+    def generate_stream(self, prompt: str, system: str = "") -> Iterator[LLMResponse]:
+        yield self.generate(prompt, system)
+    def health_check(self) -> bool:
+        return True
+    def list_models(self) -> List[str]:
         return ["qwen2.5-coder-hf", "phi3-mini-hf"]
+    def switch_model(self, model_name: str) -> bool:
+        self.model_name = model_name
+        return True
+    def supports_streaming(self) -> bool:
+        return False
+    def supports_tools(self) -> bool:
+        return False
+    def get_available_models(self) -> List[str]:
+        return self.list_models()
 
 
 class GGUFEngine(BaseLLM):
-    def load(self) -> bool:
+    def load_model(self) -> bool:
         self.loaded = True
         return True
-    def unload(self) -> bool:
+    def unload_model(self) -> bool:
         self.loaded = False
         return True
-    def predict(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        return {"response": f"[GGUF Llama.cpp Simulation] {inputs.get('prompt')}", "model": self.model_name}
-    def get_available_models(self) -> List[str]:
+    def generate(self, prompt: str, system: str = "") -> LLMResponse:
+        reply = f"[GGUF llama.cpp Simulation] {prompt}"
+        return LLMResponse(text=reply, markdown=reply, model=self.model_name)
+    def generate_stream(self, prompt: str, system: str = "") -> Iterator[LLMResponse]:
+        yield self.generate(prompt, system)
+    def health_check(self) -> bool:
+        return True
+    def list_models(self) -> List[str]:
         return ["llama3-8b-q4_k_m.gguf", "mistral-7b-q4_k_m.gguf"]
+    def switch_model(self, model_name: str) -> bool:
+        self.model_name = model_name
+        return True
+    def supports_streaming(self) -> bool:
+        return False
+    def supports_tools(self) -> bool:
+        return False
+    def get_available_models(self) -> List[str]:
+        return self.list_models()
 
 
 class FutureCloudEngine(BaseLLM):
-    def load(self) -> bool:
+    def load_model(self) -> bool:
         self.loaded = True
         return True
-    def unload(self) -> bool:
+    def unload_model(self) -> bool:
         self.loaded = False
         return True
-    def predict(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        return {"response": f"[Future Cloud Simulation] {inputs.get('prompt')}", "model": self.model_name}
-    def get_available_models(self) -> List[str]:
+    def generate(self, prompt: str, system: str = "") -> LLMResponse:
+        reply = f"[Cloud Engine Simulation] {prompt}"
+        return LLMResponse(text=reply, markdown=reply, model=self.model_name)
+    def generate_stream(self, prompt: str, system: str = "") -> Iterator[LLMResponse]:
+        yield self.generate(prompt, system)
+    def health_check(self) -> bool:
+        return True
+    def list_models(self) -> List[str]:
         return ["gpt-4o", "claude-3-opus"]
+    def switch_model(self, model_name: str) -> bool:
+        self.model_name = model_name
+        return True
+    def supports_streaming(self) -> bool:
+        return False
+    def supports_tools(self) -> bool:
+        return False
+    def get_available_models(self) -> List[str]:
+        return self.list_models()
 
 
 class LLMFactory:
