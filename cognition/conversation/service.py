@@ -1,20 +1,47 @@
 import re
+import yaml
+import os
 from typing import Dict, Any
 from cognition.conversation.models import ModelRequest, ModelResponse
 from cognition.context.service import global_context_manager
 from cognition.understanding.service import global_language_understanding
-from ai_models.llm.service import LLMEngine
+from cognition.conversation.memory_retriever import global_memory_retriever
+from cognition.conversation.post_processing import global_post_processor
+from ai_models.llm.engines import LLMFactory
 
 class ConversationEngine:
     def __init__(self):
-        self._llm = LLMEngine("qwen")
+        # Load local LLM configuration
+        config_path = "config/llm.yaml"
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    self.llm_config = yaml.safe_load(f) or {}
+            except Exception:
+                self.llm_config = {}
+        else:
+            self.llm_config = {}
+
+        self.active_engine = self.llm_config.get("active_engine", "ollama")
+        self.active_model = self.llm_config.get("active_model", "qwen2.5:3b")
+
+        # Instantiate BaseLLM through Factory
+        self._llm = LLMFactory.create_engine(self.active_engine, self.active_model, self.llm_config)
         self._llm.load()
+
+    def change_model(self, engine_type: str, model_name: str) -> bool:
+        """Dynamically switches active model/engine at runtime."""
+        self._llm.unload()
+        self.active_engine = engine_type
+        self.active_model = model_name
+        self._llm = LLMFactory.create_engine(engine_type, model_name, self.llm_config)
+        return self._llm.load()
 
     def generate_response(self, prompt: str) -> ModelResponse:
         """Generates a natural, context-aware, progressive conversation or coding response."""
         prompt_lower = prompt.strip().lower()
 
-        # 1. First run NLU analysis
+        # 1. First run NLU analysis (Phase 2.5)
         nlu = global_language_understanding.analyze(prompt)
 
         # 2. Update/Ensure context is updated with user turn
@@ -29,7 +56,7 @@ class ConversationEngine:
 
         res_obj = None
 
-        # 3. Handle progressive code generation, modification, and conversion
+        # 3. Handle progressive code generation, modification, and conversion presets
         is_coding_flow = nlu.intent in ["code_generation", "code_modification", "code_conversion"] or any(k in prompt_lower for k in ["programme", "script", "code", "somme de deux entiers", "additionne"])
 
         if is_coding_flow:
@@ -268,15 +295,25 @@ class ConversationEngine:
                     reply = "Une base de données est un système organisé de stockage de données, permettant de modéliser des informations et d'y accéder de façon rapide et structurée."
                 res_obj = ModelResponse(response=reply, metadata={"preset": "explanation"})
 
-        # 5. Fallback to LLM prediction
-        if res_obj is None:
-            llm_res = self._llm.predict({"prompt": prompt})
-            text = llm_res.get("response", "")
-            if "I am Hikmara AI local system" in text and "let me assist you" in text:
-                text = f"En tant qu'assistant local Hikmara AI, j'ai bien pris en compte votre requête '{prompt}'. Comment puis-je vous guider plus précisément ?"
-            res_obj = ModelResponse(response=text, metadata={"fallback": True})
+        # 5. Dynamic Memory and Vector Store context retrieval before LLM call
+        memory_context = global_memory_retriever.retrieve_context(prompt)
+        system_prompt = self.llm_config.get("system_prompt", "Vous êtes Hikmara AI.")
+        if memory_context:
+            system_prompt += f"\n\nContexte additionnel retrouvé en mémoire locale :\n{memory_context}"
 
-        # Record the assistant response turn in Context Manager
+        # 6. Fallback to Local LLM Engine (Ollama/Transformers/GGUF/Cloud)
+        if res_obj is None:
+            llm_res = self._llm.predict({"prompt": prompt, "system_prompt": system_prompt})
+            raw_text = llm_res.get("response", "")
+            if "I am Hikmara AI local system" in raw_text and "let me assist you" in raw_text:
+                raw_text = f"En tant qu'assistant local Hikmara AI, j'ai bien pris en compte votre requête '{prompt}'. Comment puis-je vous guider plus précisément ?"
+            res_obj = ModelResponse(response=raw_text, metadata={"fallback": True, "engine": self.active_engine, "model": self.active_model})
+
+        # 7. Post Processing layer to format/protect response
+        processed_response = global_post_processor.process_response(res_obj.response, context)
+        res_obj.response = processed_response
+
+        # Record assistant reply turn in context
         global_context_manager.update_context("assistant", res_obj.response)
         return res_obj
 
