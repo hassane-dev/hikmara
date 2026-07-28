@@ -1,11 +1,30 @@
-# Hikmara AI - LLM Configuration
+# Hikmara AI - Local Language Model (LLM) Configuration
 
 active_engine: "ollama"
 active_model: "qwen2.5:3b"
+fallback_model: "llama3:8b"
+
 temperature: 0.7
-max_context_tokens: 2048
-max_response_tokens: 512
+top_p: 0.9
+top_k: 40
+seed: 42
+
+context_size: 2048
+max_tokens: 512
 timeout_seconds: 30.0
-device: "cpu"  # cpu, gpu, or auto
-streaming: false
+keep_alive: "5m"
+streaming: true
+gpu: false
+cpu_threads: 4
+
+stop_tokens:
+  - "<|im_end|>"
+  - "User:"
+repeat_penalty: 1.1
+
 system_prompt: "Vous êtes Hikmara AI, un assistant d'intelligence locale universel, hautement sécurisé et opérationnel 100% hors-ligne."
+prompt_template: "conversation.md"
+history_size: 10
+
+embedding_model: "all-minilm-l6-v2"
+reranker_model: "bge-reranker-base"

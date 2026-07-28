@@ -1,51 +1,38 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
+from cognition.prompt_builder.registry import global_prompt_template_registry
+from cognition.prompt_builder.optimizer import global_prompt_optimizer
+from ai_models.model_registry.service import global_model_registry
 
 class PromptBuilder:
     def __init__(self):
-        self.prompts_dir = "prompts"
+        pass
 
-    def _load_template(self, filename: str) -> str:
-        """Helper to safely read prompt files from prompts/ directory."""
-        path = os.path.join(self.prompts_dir, filename)
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return f.read().strip()
-            except Exception:
-                pass
-        return ""
+    def build_prompt(self, user_message: str, context: Any, memory_context: str, intent: str, active_model: str = "qwen2.5:3b") -> Dict[str, str]:
+        """Assembles the final prompt dictionary with 'system' and 'user' sections, optimized for context tokens."""
+        language = getattr(context, "language", "fr") or "fr"
 
-    def build_prompt(self, user_message: str, context: Any, memory_context: str, intent: str) -> Dict[str, str]:
-        """Assembles the final prompt dictionary with 'system' and 'user' sections."""
-        # 1. Load system base prompt
-        system_base = self._load_template("system.md")
-        if not system_base:
-            system_base = "Vous êtes Hikmara AI, un assistant d'intelligence locale universel hors-ligne."
+        # 1. Fetch system base and specific intent template using Template Registry
+        system_base = global_prompt_template_registry.get_template("system.md", language)
 
-        # 2. Select specific template based on parsed intent
         intent_template = ""
-        if intent in ["Salutations", "Conversation générale"]:
-            intent_template = self._load_template("conversation.md")
-        elif intent in ["Génération de code", "Développement logiciel", "Explication de code"]:
-            intent_template = self._load_template("coding.md")
-        elif intent == "Sécurité":
-            intent_template = self._load_template("security.md")
-        elif intent == "Requêtes complexes":
-            intent_template = self._load_template("planning.md")
+        if intent in ["Salutations", "Conversation générale", "greeting", "general_conversation"]:
+            intent_template = global_prompt_template_registry.get_template("conversation.md", language)
+        elif intent in ["Génération de code", "Développement logiciel", "Explication de code", "code_generation", "code_modification", "code_conversion", "explanation"]:
+            intent_template = global_prompt_template_registry.get_template("coding.md", language)
+        elif intent in ["Sécurité", "security"]:
+            intent_template = global_prompt_template_registry.get_template("security.md", language)
+        elif intent in ["Requêtes complexes", "planning"]:
+            intent_template = global_prompt_template_registry.get_template("planning.md", language)
         else:
-            intent_template = self._load_template("conversation.md")
+            intent_template = global_prompt_template_registry.get_template("conversation.md", language)
 
-        # Combine system sections
+        # Assemble system parts
         system_parts = [system_base]
         if intent_template:
             system_parts.append(intent_template)
 
-        # 3. Inject memory / retrieved RAG facts
-        if memory_context:
-            system_parts.append(f"## Contexte de la mémoire locale :\n{memory_context}")
-
-        # 4. Inject active session / context references (previous code, active domain, active language)
+        # 2. Add active session / context references (previous code, active domain)
         if context:
             ctx_parts = []
             if context.active_domain:
@@ -55,19 +42,46 @@ class PromptBuilder:
 
             last_code = context.context_references.get("last_generated_code")
             if last_code:
-                ctx_parts.append(f"Dernier code généré de l'échange :\n```\n{last_code}\n```")
+                ctx_parts.append(f"Dernier code généré de l'échange (à modifier ou adapter si demandé) :\n```\n{last_code}\n```")
 
             if ctx_parts:
                 system_parts.append("## Contexte de la session active :\n" + "\n".join(ctx_parts))
 
-        system_prompt = "\n\n".join(system_parts)
+        combined_system = "\n\n".join(system_parts)
 
-        # 5. User prompt formatting
-        user_prompt = f"Message utilisateur :\n{user_message}"
+        # 3. Retrieve model constraints (max_context) and run Prompt Optimizer
+        specs = global_model_registry.get_model(active_model)
+        max_context = specs.max_context if specs else 2048
+
+        # Extract message history turns from context to pass to optimizer
+        history_turns: List[Dict[str, str]] = getattr(context, "messages", []) or []
+
+        optimized = global_prompt_optimizer.optimize_prompt_inputs(
+            system_base=combined_system,
+            history=history_turns,
+            retrieved_context=memory_context,
+            user_message=user_message
+        )
+
+        # Build final combined system prompt including RAG retrieved memories
+        system_prompt_parts = [optimized["system_prompt"]]
+        if optimized["retrieved_context"]:
+            system_prompt_parts.append(f"## Contexte récupéré (RAG) :\n{optimized['retrieved_context']}")
+
+        # Format optimized history turns into prompt system context
+        if optimized["history"]:
+            hist_str_parts = []
+            for h in optimized["history"]:
+                role_label = "Utilisateur" if h.get("role") == "user" else "Assistant"
+                hist_str_parts.append(f"{role_label}: {h.get('message')}")
+            system_prompt_parts.append("## Historique des échanges :\n" + "\n".join(hist_str_parts))
+
+        final_system = "\n\n".join(system_prompt_parts)
+        final_user = f"Message utilisateur :\n{user_message}"
 
         return {
-            "system": system_prompt,
-            "user": user_prompt
+            "system": final_system,
+            "user": final_user
         }
 
 global_prompt_builder = PromptBuilder()
