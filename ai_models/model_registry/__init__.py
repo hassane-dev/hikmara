@@ -1,0 +1,2 @@
+from ai_models.model_registry.service import global_model_registry
+from ai_models.model_registry.models import ModelSpecs

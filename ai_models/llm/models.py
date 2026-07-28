@@ -24,4 +24,5 @@ class LLMResponse(BaseModel):
     model: str = Field(..., description="Identifiant du modèle de langage utilisé")
     finish_reason: str = Field("stop", description="Raison de la fin de génération (stop, length, tool_calls, etc.)")
     tool_calls: List[ToolCall] = Field(default_factory=list, description="Appels d'outils requis par le modèle")
+    reasoning: Optional[str] = Field(None, description="Chaîne de réflexion / Raisonnement interne du modèle")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Métadonnées supplémentaires")

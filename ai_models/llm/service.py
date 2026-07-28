@@ -1,40 +1,32 @@
-import re
 from ai_models.base_model import BaseAIModel
+from ai_models.llm.engines import LLMFactory
 
 class LLMEngine(BaseAIModel):
+    """
+    Decoupled compatibility wrapper around LLMFactory engines.
+    Exposes BaseAIModel signature to remain compatible with legacy references.
+    """
+    def __init__(self, model_name="qwen2.5:3b"):
+        super().__init__(model_name)
+        self.engine_impl = LLMFactory.create_engine("ollama", model_name)
+
     def load(self):
-        self.loaded = True
-        return True
+        self.loaded = self.engine_impl.load_model()
+        return self.loaded
 
     def unload(self):
-        self.loaded = False
-        return True
+        self.loaded = not self.engine_impl.unload_model()
+        return not self.loaded
 
     def predict(self, inputs):
+        """Standard generic offline generation predict signature."""
         prompt = inputs.get("prompt", "")
-        clean_prompt = prompt.strip().lower()
-
-        # Custom responses for natural, contextualized offline conversation
-        if clean_prompt == "bonjour":
-            return {"response": "Bonjour !\nComment puis-je vous aider aujourd'hui ?"}
-        elif clean_prompt == "good morning":
-            return {"response": "Good morning!\nHow can I help you today?"}
-        elif any(g in clean_prompt for g in ["comment vas-tu", "comment ca va", "comment ça va"]):
-            return {"response": "Je vais très bien, merci ! En tant qu'assistant local Hikmara AI, je suis opérationnel à 100%. Que puis-je faire pour vous aujourd'hui ?"}
-        elif any(g in clean_prompt for g in ["how are you", "how's it going"]):
-            return {"response": "I am doing great, thank you! As your local Hikmara AI assistant, I am fully operational offline. How can I help you today?"}
-        elif any(g in clean_prompt for g in ["merci", "thanks", "thank you"]):
-            return {"response": "De rien ! C'est un plaisir de vous aider. N'hésitez pas si vous avez d'autres requêtes !"}
-        elif "kubernetes" in clean_prompt:
-            return {"response": "Kubernetes est un orchestrateur de conteneurs open-source conçu pour automatiser le déploiement, la mise à l'échelle et la gestion des applications conteneurisées."}
-        elif "docker" in clean_prompt:
-            return {"response": "Docker est une plateforme logicielle qui permet de concevoir, tester et déployer des applications rapidement sous forme de conteneurs légers et isolés."}
-
-        # General response template
-        return {"response": f"I am Hikmara AI local system. Regarding '{prompt}', let me assist you."}
+        system = inputs.get("system_prompt", "")
+        response_obj = self.engine_impl.generate(prompt, system)
+        return {"response": response_obj.text, "model": self.model_name}
 
     def status(self):
         return {"loaded": self.loaded}
 
     def get_information(self):
-        return {"type": "LLM"}
+        return {"type": "LLM", "model": self.model_name}
