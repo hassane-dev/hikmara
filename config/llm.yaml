@@ -1,0 +1,11 @@
+# Hikmara AI - LLM Configuration
+
+active_engine: "ollama"
+active_model: "qwen2.5:3b"
+temperature: 0.7
+max_context_tokens: 2048
+max_response_tokens: 512
+timeout_seconds: 30.0
+device: "cpu"  # cpu, gpu, or auto
+streaming: false
+system_prompt: "Vous êtes Hikmara AI, un assistant d'intelligence locale universel, hautement sécurisé et opérationnel 100% hors-ligne."

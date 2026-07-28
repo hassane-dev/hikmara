@@ -1,5 +1,7 @@
 import pytest
 from cognition.router.service import global_intent_router
+from cognition.router.tool_router import global_tool_router
+from cognition.router.agent_router import global_agent_router
 
 def test_greeting_routing():
     decision = global_intent_router.route("Bonjour")
@@ -46,3 +48,15 @@ def test_agent_required_routing():
 def test_sensitive_action_routing():
     decision = global_intent_router.route("exécute le script de nettoyage systeme")
     assert decision.safety_level == "sensitive"
+
+def test_tool_router_decisions():
+    res = global_tool_router.decide_tools("Crée un fichier app.py")
+    assert res["needs_tools"] is True
+    assert "create_file" in res["tools_to_run"]
+    assert res["security_authorized"] is True
+
+def test_agent_router_decisions():
+    res = global_agent_router.decide_agents("concois un grand systeme", "Développement logiciel", "complex")
+    assert res["requires_agents"] is True
+    assert "architect" in res["agents_to_trigger"]
+    assert "programmer" in res["agents_to_trigger"]

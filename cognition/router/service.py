@@ -3,6 +3,8 @@ from typing import List, Callable, Dict, Any
 from cognition.router.models import RoutingDecision, IntentResult
 from cognition.understanding.service import global_language_understanding
 from cognition.context.service import global_context_manager
+from cognition.router.tool_router import global_tool_router
+from cognition.router.agent_router import global_agent_router
 
 class RoutingRule:
     def __init__(self, category: str, matcher: Callable[[str], bool], confidence: float, recommended_pipeline: str, agents_to_trigger: List[str], justification: str):
@@ -161,10 +163,10 @@ class IntentRouter:
         )
 
     def route(self, prompt: str) -> RoutingDecision:
-        """Analyzes a user prompt using NLU and returns a structured RoutingDecision."""
+        """Analyzes a user prompt using NLU, ToolRouter, AgentRouter, and returns a structured RoutingDecision."""
         prompt_lower = prompt.strip().lower()
 
-        # 1. Invoke Language Understanding Layer (Phase 2.5)
+        # 1. Invoke Language Understanding Layer
         nlu = global_language_understanding.analyze(prompt)
 
         # 2. Retrieve current conversation context
@@ -229,21 +231,14 @@ class IntentRouter:
             else:
                 complexity = "simple"
 
-        # 5. Determine if Agents/Tools/Model are required
-        # For simple coding conversations, we bypass agents! (as required by Part 3 and Example 3)
-        requires_agents = False
-        agents_to_trigger = []
-        if complexity == "complex":
-            requires_agents = True
-            agents_to_trigger = ["architect", "programmer", "tester", "security", "docs"]
-        elif intent in ["Développement logiciel", "Génération de code"] and complexity != "simple":
-            requires_agents = True
-            agents_to_trigger = ["architect", "programmer", "tester", "security", "docs"]
-        elif intent == "Sécurité":
-            requires_agents = True
-            agents_to_trigger = ["security"]
+        # 5. Delegate to Tool Router and Agent Router (Phase 2.5 decoupling)
+        tools_decision = global_tool_router.decide_tools(prompt)
+        agents_decision = global_agent_router.decide_agents(prompt, intent, complexity)
 
-        requires_tools = nlu.intent == "tools" or any(k in prompt_lower for k in ["pip", "npm", "package", "dependency", "installe", "outil", "tool", "file", "fichier", "run", "exécute"])
+        requires_tools = tools_decision["needs_tools"] or nlu.intent == "tools" or any(k in prompt_lower for k in ["pip", "npm", "package", "dependency", "installe", "outil", "tool", "file", "fichier", "run", "exécute"])
+        requires_agents = agents_decision["requires_agents"]
+        agents_to_trigger = agents_decision["agents_to_trigger"]
+
         requires_model = nlu.intent in ["general_conversation", "code_generation", "code_modification", "code_conversion", "explanation"] or intent in ["Salutations", "Conversation générale", "Génération de code", "Développement logiciel", "Explication de code"]
         requires_memory = nlu.is_follow_up or nlu.references_previous_context or bool(context.active_domain)
 
@@ -279,7 +274,7 @@ class IntentRouter:
             requires_tools=requires_tools,
             requires_agents=requires_agents,
             requires_memory=requires_memory,
-            safety_level="sensitive" if requires_tools or "exécute" in prompt_lower else "normal",
+            safety_level="sensitive" if requires_tools or "exécute" in prompt_lower or not tools_decision["security_authorized"] else "normal",
             agents_to_trigger=agents_to_trigger,
             justification=justification,
             confidence=nlu.confidence

@@ -1,3 +1,4 @@
+import re
 from cognition.context.models import ConversationContext
 from memory.service import global_memory_system
 
@@ -26,11 +27,15 @@ class ContextManager:
 
         text_lower = message.lower()
 
+        if role == "assistant":
+            context.previous_responses.append(message)
+
         # Update from NLU result first if available (Phase 2.5)
         if nlu_result:
             context.context_references["last_nlu_result"] = nlu_result.model_dump()
             context.language = nlu_result.language
             context.previous_intents.append(nlu_result.intent)
+            context.current_topic = nlu_result.intent
 
             # Merge entities
             for k, v in nlu_result.entities.items():
@@ -52,6 +57,7 @@ class ContextManager:
             context.previous_routing_decisions.append(routing_decision.model_dump())
             if not nlu_result:
                 context.previous_intents.append(routing_decision.intent)
+                context.current_topic = routing_decision.intent
                 if routing_decision.domain and routing_decision.domain not in ["general", "conversation"]:
                     context.active_domain = routing_decision.domain
                 if routing_decision.language:
@@ -77,6 +83,12 @@ class ContextManager:
         if "sqlite" in text_lower or "base de données" in text_lower or "database" in text_lower:
             context.context_references["has_sqlite"] = True
 
+        # Extract potential file references mentioned
+        file_matches = re.findall(r"\b\w+\.(?:py|php|json|db|txt|yaml|yml|md)\b", text_lower)
+        for f in file_matches:
+            if f not in context.file_references:
+                context.file_references.append(f)
+
     def set_last_generated_code(self, code_text: str):
         """Stores the latest generated code in contextual references."""
         self._current_context.context_references["last_generated_code"] = code_text
@@ -87,3 +99,4 @@ class ContextManager:
         global_memory_system.conversation_memory = []
 
 global_context_manager = ContextManager()
+global_conversation_manager = global_context_manager  # Expose as Conversation Manager for architectural alignment
