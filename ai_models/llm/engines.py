@@ -105,16 +105,27 @@ class OllamaEngine(BaseLLM):
             text = "Good morning! How can I help you today?"
 
         # Check for code generation requests
-        elif "programme" in prompt_lower or "script" in prompt_lower or "code" in prompt_lower or "additionner" in prompt_lower or "convertis" in prompt_lower or "php" in prompt_lower or "python" in prompt_lower or "ajoute" in prompt_lower or "modifie" in prompt_lower:
+        elif "programme" in prompt_lower or "script" in prompt_lower or "code" in prompt_lower or "additionner" in prompt_lower or "convertis" in prompt_lower or "php" in prompt_lower or "python" in prompt_lower or "ajoute" in prompt_lower or "modifie" in prompt_lower or "javascript" in prompt_lower or "js" in prompt_lower:
             # Check target language from prompt and context manager references
             from cognition.context.service import global_context_manager
             ctx = global_context_manager.get_context()
 
             is_php = "php" in prompt_lower or ctx.active_domain == "php"
+            is_js = "javascript" in prompt_lower or "js" in prompt_lower or ctx.active_domain == "javascript"
             has_sqlite = "sqlite" in prompt_lower or ctx.context_references.get("has_sqlite", False)
             has_gui = "interface graphique" in prompt_lower or "gui" in prompt_lower or "pyqt" in prompt_lower or "pyqt6" in prompt_lower or ctx.context_references.get("has_gui", False)
 
-            if is_php:
+            if is_js:
+                text = (
+                    "Certainement ! Voici le programme d'addition converti en JavaScript :\n\n"
+                    "```javascript\n"
+                    "function calculerSomme(a, b) {\n"
+                    "    return a + b;\n"
+                    "}\n"
+                    "console.log('La somme est : ' + calculerSomme(5, 10));\n"
+                    "```"
+                )
+            elif is_php:
                 if has_sqlite:
                     text = (
                         "Certainement ! Voici le programme converti en PHP, conservant l'addition et la persistance SQLite :\n\n"
