@@ -16,6 +16,21 @@ from core.system.service import global_resource_monitor
 from core.module_registry.service import global_module_registry
 from tools.registry import global_tool_registry
 
+from cognition.planner.task_analyzer import global_task_complexity_analyzer
+from cognition.router.agent_selector import global_agent_selector
+
+class AgentExecutionContext:
+    """
+    Context for executing multi-agent tasks, tracking objectives, decisions, and outputs (Phase 4).
+    """
+    def __init__(self, task_id: str, objective: str):
+        self.task_id = task_id
+        self.objective = objective
+        self.artifacts: dict = {}
+        self.decisions: list = []
+        self.warnings: list = []
+
+
 class AgentManager(BaseAgent):
     def __init__(self, agent_id):
         super().__init__(agent_id, "manager", ["admin"])
@@ -35,6 +50,45 @@ class AgentManager(BaseAgent):
 
     def execute_task(self, task, context):
         start_time = time.time()
+        task_lower = task.strip().lower()
+
+        # ==========================================
+        # PHASE 4.5 GUARD-RAIL 1: Security Virus Refusal
+        # ==========================================
+        if any(k in task_lower for k in ["virus", "malware", "trojan", "ransomware", "backdoor", "spyware"]):
+            refusal_msg = "Sécurité : Cette requête contient des termes liés à la création de logiciels malveillants. Hikmara AI refuse d'exécuter ou de générer des scripts offensifs conformément à ses règles d'éthique et de sécurité."
+            global_context_manager.update_context("user", task)
+            global_context_manager.update_context("assistant", refusal_msg)
+            return {
+                "orchestrated": False,
+                "route_decision": "Sécurité",
+                "response": refusal_msg,
+                "agents_used": [],
+                "execution_stats": {
+                    "execution_time_seconds": round(time.time() - start_time, 4),
+                    "cpu_percent": 0.0,
+                    "ram_percent": 0.0
+                }
+            }
+
+        # ==========================================
+        # PHASE 4.5 GUARD-RAIL 2: Blind Execution Restriction
+        # ==========================================
+        if any(k in task_lower for k in ["lance toutes les tâches", "exécute toutes les tâches", "run all tasks", "lance tous les agents"]):
+            prompt_msg = "Quelles tâches souhaitez-vous exécuter ?"
+            global_context_manager.update_context("user", task)
+            global_context_manager.update_context("assistant", prompt_msg)
+            return {
+                "orchestrated": False,
+                "route_decision": "Conversation générale",
+                "response": prompt_msg,
+                "agents_used": [],
+                "execution_stats": {
+                    "execution_time_seconds": round(time.time() - start_time, 4),
+                    "cpu_percent": 0.0,
+                    "ram_percent": 0.0
+                }
+            }
 
         # 1. Run Language Understanding Layer analysis (Phase 2.5)
         nlu = global_language_understanding.analyze(task)
@@ -48,13 +102,20 @@ class AgentManager(BaseAgent):
         # Get system resource usage at start
         metrics_start = global_resource_monitor.get_metrics()
 
+        # Use NLU to build task profiles and select agents dynamically
+        task_profile = global_task_complexity_analyzer.analyze_task(task, nlu)
+        selected_agents = global_agent_selector.select_agents(task, task_profile)
+
+        # Force pipeline modification to direct conversation if no agents selected (Level 0)
+        pipeline = intent.pipeline
+        if not selected_agents and pipeline == "agent_task":
+            pipeline = "direct_conversation"
+
         # 4. Execution Pipeline Selection based on routing decision
-        if intent.pipeline in ["direct_conversation", "conversation", "coding_conversation"]:
+        if pipeline in ["direct_conversation", "conversation", "coding_conversation"]:
             # Route to our high-level contextual ConversationEngine
             conv_res = global_conversation_engine.generate_response(task)
             response_text = conv_res.response
-
-            # Note: ConversationEngine.generate_response internally updates assistant context
 
             execution_time = time.time() - start_time
             metrics_end = global_resource_monitor.get_metrics()
@@ -74,9 +135,8 @@ class AgentManager(BaseAgent):
                 }
             }
 
-        elif intent.pipeline == "system_commands":
+        elif pipeline == "system_commands":
             # Query system status services directly
-            task_lower = task.lower()
             if any(k in task_lower for k in ["mémoire", "memory", "cpu", "ram", "metrics"]):
                 metrics = global_resource_monitor.get_metrics()
                 response_text = (
@@ -121,7 +181,7 @@ class AgentManager(BaseAgent):
                 }
             }
 
-        elif intent.pipeline == "tools":
+        elif pipeline == "tools":
             # Security layer checks authorization for sensitive tool access
             authorized = global_security_policy.authorize_action("agent_manager", "access_tools", {"prompt": task})
             if not authorized:
@@ -153,13 +213,16 @@ class AgentManager(BaseAgent):
 
         else:
             # "agent_task" -> Multi-Agent Task Orchestration
-            # Trigger agents conditionally based on intent results
-            agents_to_run = intent.agents_to_trigger if intent.agents_to_trigger else ["architect", "programmer", "tester", "security", "docs"]
+            # Create a shared execution context
+            exec_ctx = AgentExecutionContext(task_id="task_session_" + str(int(time.time())), objective=task)
+
+            agents_to_run = selected_agents if selected_agents else ["architect", "programmer", "tester", "security", "docs"]
 
             arch_res = {}
             if "architect" in agents_to_run:
                 arch_res = self.architect.execute_task(task, context)
                 global_agent_comm_bus.publish_agent_event("architect.completed", arch_res)
+                exec_ctx.artifacts["architecture"] = arch_res
             else:
                 arch_res = {"blueprint": "Pas d'architecture requise pour cette tâche."}
 
@@ -167,7 +230,7 @@ class AgentManager(BaseAgent):
             if "programmer" in agents_to_run:
                 prog_res = self.programmer.execute_task(task, context)
                 global_agent_comm_bus.publish_agent_event("programmer.completed", prog_res)
-                # Store programmer code synthesis results in Context Manager
+                exec_ctx.artifacts["code"] = prog_res
                 code_synthesized = prog_res.get("code", "")
                 if code_synthesized:
                     global_context_manager.set_last_generated_code(code_synthesized)

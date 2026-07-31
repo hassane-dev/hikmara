@@ -6,7 +6,8 @@ from memory.router import global_memory_router
 from knowledge.router import global_knowledge_router
 
 def test_session_manager():
-    # Test session stats
+    # Re-open session to isolate stats
+    global_session_manager.open_session("test_session_id", "admin")
     session = global_session_manager.get_active_session()
     assert session is not None
     assert session.current_user == "admin"
