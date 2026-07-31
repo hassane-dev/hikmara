@@ -10,7 +10,7 @@ class LanguageUnderstandingService:
             "general_conversation": r"\b(comment vas-tu|comment ça va|comment ca va|how are you|how's it going|merci|thanks|thank you|de rien|s'il te plaît|please|qui es-tu|who are you)\b",
             "code_conversion": r"\b(convertis|transforme|réécris|convert|rewrite|translate|traduis)\b",
             "code_modification": r"\b(ajoute|modifie|améliore|change|connecte|add|modify|improve|update|change|connect|intègre|integre|corrige|correct|bug|fix|débugue|debug)\b",
-            "code_generation": r"\b(génère|écris|générer|écriture|génération|crée|cree|fais-moi|fais moi|développe|developpe|generate|write|create|build|make me|program|programme|script|code|fonction|function|classe|class)\b",
+            "code_generation": r"\b(génère|écris|générer|écriture|génération|crée|cree|fais-moi|fais moi|développe|developpe|generate|write|create|build|make me|program|programme|script|code|fonction|function|classe|class|conçois|concois)\b",
             "explanation": r"\b(explique|explication|comment fonctionne|que fait|explain|how does|why|pourquoi|c'est quoi|what is)\b",
             "system": r"\b(mémoire|memory|modules|module|journaux|journal|logs|log|système|system|cpu|ram|metrics|paramètres|parametres|config)\b",
             "tools": r"\b(installe|dépendance|configure l'outil|pip|npm|package|dependency|tool|tools|crée un fichier|create file|lis ce fichier|read file|analyse ce dossier|analyze folder|exécute ce script|run script|delete file|supprime fichier)\b"
@@ -51,6 +51,11 @@ class LanguageUnderstandingService:
         # Apply specific overrides for specific semantic requests
         if "audit de sécurité" in text_lower or "security audit" in text_lower or "sécurité" in text_lower or "security" in text_lower:
             scores["code_modification"] = scores.get("code_modification", 0) + 2
+
+        # Override system matching for software architecture keywords (conçois un système, etc.)
+        if any(k in text_lower for k in ["conçois un système", "concois un systeme", "conçois un grand", "concois un grand"]):
+            scores["system"] = 0
+            scores["code_generation"] = scores.get("code_generation", 0) + 2
 
         # 3. Resolve conflicts (Greeting + Technical Actions / Coding)
         detected_intent = "unknown"
