@@ -216,7 +216,8 @@ class AgentManager(BaseAgent):
             # Create a shared execution context
             exec_ctx = AgentExecutionContext(task_id="task_session_" + str(int(time.time())), objective=task)
 
-            agents_to_run = selected_agents if selected_agents else ["architect", "programmer", "tester", "security", "docs"]
+            # Strictly run the selected agents (never alter the list or double-decide with defaults)
+            agents_to_run = selected_agents
 
             arch_res = {}
             if "architect" in agents_to_run:
