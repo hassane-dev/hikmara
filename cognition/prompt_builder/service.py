@@ -12,10 +12,17 @@ class PromptBuilder:
         """Assembles the final prompt dictionary with 'system' and 'user' sections, optimized for context tokens."""
         language = getattr(context, "language", "fr") or "fr"
 
-        # 1. Fetch system base and specific intent template using Template Registry
+        # ==========================================
+        # 1. SYSTEM IDENTITY (Identité et règles permanentes)
+        # ==========================================
         system_base = global_prompt_template_registry.get_template("system.md", language)
+        system_parts = [system_base]
 
+        # ==========================================
+        # 2. TASK CONTEXT (Directives de l'intention courante uniquement)
+        # ==========================================
         intent_template = ""
+        # Map localized intents or keys
         if intent in ["Salutations", "Conversation générale", "greeting", "general_conversation"]:
             intent_template = global_prompt_template_registry.get_template("conversation.md", language)
         elif intent in ["Génération de code", "Développement logiciel", "Explication de code", "code_generation", "code_modification", "code_conversion", "explanation"]:
@@ -27,12 +34,12 @@ class PromptBuilder:
         else:
             intent_template = global_prompt_template_registry.get_template("conversation.md", language)
 
-        # Assemble system parts
-        system_parts = [system_base]
         if intent_template:
             system_parts.append(intent_template)
 
-        # 2. Add active session / context references (previous code, active domain)
+        # ==========================================
+        # 3. ACTIVE CONTEXT (Informations de session éphémères pertinentes)
+        # ==========================================
         if context:
             ctx_parts = []
             if context.active_domain:
@@ -40,16 +47,28 @@ class PromptBuilder:
             if context.language:
                 ctx_parts.append(f"Langue d'interaction : {context.language}")
 
-            last_code = context.context_references.get("last_generated_code")
-            if last_code:
-                ctx_parts.append(f"Dernier code généré de l'échange (à modifier ou adapter si demandé) :\n```\n{last_code}\n```")
+            # Règle de cloisonnement spécifique pour last_generated_code
+            # Injecté uniquement pour les modifications, conversions de code, ou requêtes d'adaptation explicites
+            is_code_adaptation_intent = intent in ["code_modification", "code_conversion", "Développement logiciel"]
+            user_msg_lower = user_message.lower()
+            is_explicit_adaptation_request = any(k in user_msg_lower for k in [
+                "modifie", "change", "ajoute", "corrige", "convertis", "réécris", "adapte", "décline", "en intégrant", "integre"
+            ])
+
+            if (is_code_adaptation_intent or is_explicit_adaptation_request) and intent not in ["Salutations", "greeting"]:
+                last_code = context.context_references.get("last_generated_code")
+                if last_code:
+                    ctx_parts.append(f"Dernier code généré de l'échange (à modifier ou adapter si demandé) :\n```\n{last_code}\n```")
 
             if ctx_parts:
                 system_parts.append("## Contexte de la session active :\n" + "\n".join(ctx_parts))
 
         combined_system = "\n\n".join(system_parts)
 
-        # 3. Retrieve model constraints (max_context) and run Prompt Optimizer
+        # ==========================================
+        # 4. MEMORY / HISTORY (Historique + RAG optimisé)
+        # ==========================================
+        # Retrieve model constraints (max_context) and run Prompt Optimizer
         specs = global_model_registry.get_model(active_model)
         max_context = specs.max_context if specs else 2048
 
@@ -77,6 +96,10 @@ class PromptBuilder:
             system_prompt_parts.append("## Historique des échanges :\n" + "\n".join(hist_str_parts))
 
         final_system = "\n\n".join(system_prompt_parts)
+
+        # ==========================================
+        # 5. USER REQUEST (La requête actuelle de l'utilisateur)
+        # ==========================================
         final_user = f"Message utilisateur :\n{user_message}"
 
         return {
