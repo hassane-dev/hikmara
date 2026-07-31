@@ -19,7 +19,7 @@ def test_phase4_scenario_3_api_sqlite():
     assert res["orchestrated"] is True
     assert "architect" in res["agents_used"]
     assert "programmer" in res["agents_used"]
-    assert "tester" not in res["agents_used"]  # Filtered out by Rule 2
+    assert "tester" not in res["agents_used"]  # Filtered out because tests are not explicit
     assert "security" not in res["agents_used"]
 
 def test_phase4_scenario_4_security_audit():
@@ -58,3 +58,77 @@ def test_agent_execution_context_instantiation():
     assert exec_ctx.task_id == "test_id"
     assert exec_ctx.objective == "test_obj"
     assert isinstance(exec_ctx.artifacts, dict)
+
+# ==========================================
+# PHASE 4 REVIEW LIMIT SCENARIO TESTS
+# ==========================================
+
+def test_limit_scenario_python_function():
+    """- « Écris une fonction Python. » -> Programmer uniquement."""
+    res = global_agent_manager.execute_task("Écris une fonction Python.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["programmer"]
+
+def test_limit_scenario_rest_api():
+    """- « Crée une API REST complète. » -> Architect + Programmer."""
+    res = global_agent_manager.execute_task("Crée une API REST complète.", {})
+    assert res["orchestrated"] is True
+    assert "architect" in res["agents_used"]
+    assert "programmer" in res["agents_used"]
+    assert len(res["agents_used"]) == 2
+
+def test_limit_scenario_security_only():
+    """- « Analyse uniquement la sécurité. » -> Security uniquement."""
+    res = global_agent_manager.execute_task("Analyse uniquement la sécurité.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["security"]
+
+def test_limit_scenario_docs_only():
+    """- « Écris une documentation. » -> Docs uniquement."""
+    res = global_agent_manager.execute_task("Écris une documentation.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["docs"]
+
+def test_limit_scenario_bug_fix_only():
+    """- « Corrige ce bug. » -> Programmer uniquement."""
+    res = global_agent_manager.execute_task("Corrige ce bug.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["programmer"]
+
+def test_limit_scenario_run_all_refusal():
+    """- « Lance tous les agents. » -> Refus contrôlé ou demande de précision."""
+    res = global_agent_manager.execute_task("Lance tous les agents.", {})
+    assert res["orchestrated"] is False
+    assert len(res["agents_used"]) == 0
+    assert "Quelles tâches souhaitez-vous exécuter" in res["response"]
+
+def test_limit_scenario_full_project_collaboration():
+    """- « Analyse ce projet complet. » -> Collaboration complète."""
+    res = global_agent_manager.execute_task("Analyse ce projet complet.", {})
+    assert res["orchestrated"] is True
+    assert set(res["agents_used"]) == {"architect", "programmer", "tester", "security", "docs"}
+
+def test_limit_scenario_sqlite_function():
+    """- « Écris une fonction SQLite. » -> Programmer uniquement."""
+    res = global_agent_manager.execute_task("Écris une fonction SQLite.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["programmer"]
+
+def test_limit_scenario_explain_sqlite():
+    """- « Explique SQLite. » -> Aucun agent."""
+    res = global_agent_manager.execute_task("Explique SQLite.", {})
+    assert res["orchestrated"] is False
+    assert len(res["agents_used"]) == 0
+
+def test_limit_scenario_sqlite_with_tests():
+    """- « Conçois une base SQLite avec tests unitaires. » -> Tester uniquement."""
+    res = global_agent_manager.execute_task("Conçois une base SQLite avec tests unitaires.", {})
+    assert res["orchestrated"] is True
+    assert res["agents_used"] == ["tester"]
+
+def test_limit_scenario_sqlite_audit_perf():
+    """- « Audite les performances SQLite. » -> Sélection selon l'analyse réelle de la tâche (ex: Architect)."""
+    res = global_agent_manager.execute_task("Audite les performances SQLite.", {})
+    assert res["orchestrated"] is True
+    assert "architect" in res["agents_used"]
+    assert len(res["agents_used"]) == 1
