@@ -289,6 +289,9 @@ class GGUFEngine(BaseLLM):
         if configured_path and os.path.exists(configured_path):
             return configured_path
 
+        # Standard real installed model path fallback
+        real_installed_fallback = "ai_models/models/general/qwen2.5-3b-instruct-q4_k_m.gguf"
+
         # 2. Map standard models to folders
         name_lower = self.model_name.lower()
 
@@ -315,12 +318,15 @@ class GGUFEngine(BaseLLM):
             path_options.insert(0, os.path.join(folder, f"{self.model_name}.gguf"))
             path_options.append(f"ai_models/models/general/{self.model_name}.gguf")
 
+        # Add fallback option to the primary installed qwen2.5-3b-instruct-q4_k_m.gguf model
+        path_options.append(real_installed_fallback)
+
         for p in path_options:
             if os.path.exists(p):
                 return p
 
         # Default fallback path
-        return os.path.join(folder, default_filename)
+        return real_installed_fallback
 
     def load_model(self) -> bool:
         if not HAS_LLAMA_CPP:
@@ -480,7 +486,7 @@ class GGUFEngine(BaseLLM):
                 for f in os.listdir(folder):
                     if f.endswith(".gguf"):
                         models.append(f)
-        return models or ["qwen-model.gguf", "coder-model.gguf", "reasoning-model.gguf"]
+        return models or ["qwen2.5-3b-instruct-q4_k_m.gguf", "qwen-model.gguf", "coder-model.gguf", "reasoning-model.gguf"]
 
     def switch_model(self, model_name: str) -> bool:
         self.unload_model()

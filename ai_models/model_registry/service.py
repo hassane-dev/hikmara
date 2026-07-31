@@ -11,7 +11,21 @@ class ModelRegistry:
         self._models[specs.id] = specs
 
     def _register_default_models(self):
-        # Register GGUF local models first
+        # Register the primary real installed local GGUF model
+        self.register_model(ModelSpecs(
+            id="qwen2.5-3b-instruct-q4_k_m.gguf",
+            name="Qwen 2.5 3B Instruct (GGUF)",
+            family="Qwen",
+            engine="gguf",
+            size_gb=2.0,
+            parameters="3B",
+            max_context=4096,
+            streaming=True,
+            ram_estimated_gb=4.0,
+            precision="q4_K_M"
+        ))
+
+        # Register specialized/category models
         self.register_model(ModelSpecs(
             id="qwen-model.gguf",
             name="Qwen 2.5 3B (GGUF)",

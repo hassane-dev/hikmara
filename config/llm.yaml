@@ -2,12 +2,12 @@
 
 # Core Local Execution Engine (GGUF is primary local core, Ollama is secondary)
 active_engine: "gguf"
-active_model: "qwen-model.gguf"
+active_model: "qwen2.5-3b-instruct-q4_k_m.gguf"
 fallback_engine: "ollama"
 fallback_model: "qwen2.5:3b"
 
 # GGUF Model Folder configuration
-gguf_model_path: "ai_models/models/general/qwen-model.gguf"
+gguf_model_path: "ai_models/models/general/qwen2.5-3b-instruct-q4_k_m.gguf"
 gguf_coding_path: "ai_models/models/coding/coder-model.gguf"
 gguf_reasoning_path: "ai_models/models/reasoning/reasoning-model.gguf"
 
