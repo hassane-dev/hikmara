@@ -101,3 +101,49 @@ def test_prompt_builder_v2_scenario_5_new_conversation_reset():
     assert "import PyQt6" not in system_prompt
     assert fresh_context.context_references.get("has_gui") is None
     assert fresh_context.context_references.get("last_generated_code") is None
+
+def test_prompt_builder_v2_pyqt6_sqlite_to_greeting():
+    """Test PyQt6+SQLite request followed by 'Bonjour, quelles sont tes capacités?'."""
+    global_context_manager.reset_context()
+    context = global_context_manager.get_context()
+    context.context_references["last_generated_code"] = "import PyQt6\n# Some sqlite code"
+    context.context_references["has_gui"] = True
+    context.context_references["has_sqlite"] = True
+
+    # Ask a general greeting question
+    prompt = global_prompt_builder.build_prompt(
+        user_message="Bonjour, quelles sont tes capacités ?",
+        context=context,
+        memory_context="",
+        intent="greeting",
+        active_model="qwen2.5-3b-instruct-q4_k_m.gguf"
+    )
+
+    system_prompt = prompt["system"]
+    # Ensure no PyQt6/SQLite leakage in system instructions
+    assert "import PyQt6" not in system_prompt
+    # Must use general conversation template
+    assert "expert en développement logiciel" not in system_prompt
+    assert "chaleureuse" in system_prompt or "naturelle" in system_prompt
+
+def test_prompt_builder_v2_pyqt6_sqlite_to_simple_addition():
+    """Test PyQt6+SQLite request followed by simple code generation: addition of two numbers."""
+    global_context_manager.reset_context()
+    context = global_context_manager.get_context()
+    context.context_references["last_generated_code"] = "import PyQt6\n# PyQt6 Window and SQLite connection"
+    context.context_references["has_gui"] = True
+    context.context_references["has_sqlite"] = True
+
+    # Ask a simple code generation question
+    prompt = global_prompt_builder.build_prompt(
+        user_message="Écris-moi une fonction Python qui additionne deux nombres.",
+        context=context,
+        memory_context="",
+        intent="code_generation",
+        active_model="qwen2.5-3b-instruct-q4_k_m.gguf"
+    )
+
+    system_prompt = prompt["system"]
+    # The system prompt should NOT contain the PyQt6/SQLite code snippet
+    assert "import PyQt6" not in system_prompt
+    assert "PyQt6 Window" not in system_prompt
