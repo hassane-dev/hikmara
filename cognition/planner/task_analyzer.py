@@ -7,8 +7,6 @@ class TaskProfile(BaseModel):
     domain: str = Field(..., description="Le domaine résolu de la tâche")
     complexity: str = Field(..., description="Le niveau de complexité résolu (simple, moderate, complex, trivial)")
     risk: str = Field(..., description="L'évaluation du risque de sécurité (low, medium, high)")
-    requires_agents: bool = Field(default=False, description="Indique si des agents doivent collaborer")
-    recommended_agents: List[str] = Field(default_factory=list, description="Liste ordonnée d'agents recommandés (recommandations neutres)")
     deliverables: List[str] = Field(default_factory=list, description="Livrables attendus (ex: code, architecture, tests, doc, audit)")
     scope: str = Field(default="module", description="Portée de la demande (single_function, module, system, full_project)")
     functional_needs: List[str] = Field(default_factory=list, description="Besoins fonctionnels détectés")
@@ -77,11 +75,13 @@ class TaskComplexityAnalyzer:
             functional_needs.append("security_hardening")
 
         # 5. Determine Complexity Level
-        # Trivial: conversation, greeting, system utility commands, tool management, or basic conceptual explanation
+        has_dev_keywords = has_word(text_lower, ["code", "écris", "génère", "programme", "corrige", "refactorise", "ajoute", "build", "concois", "conçois", "plan", "architecture"])
+
+        # Trivial: conversation, greeting, system commands, tools, basic explanations without code/design, or unclassified input with no functional needs
         is_level_0 = (intent in ["greeting", "general_conversation"]) or \
                      (intent in ["system", "tools"]) or \
-                     (intent == "explanation" and not deliverables) or \
-                     (intent == "unknown" and not deliverables and not functional_needs)
+                     (intent == "explanation" and not has_dev_keywords) or \
+                     (intent == "unknown" and not deliverables and not functional_needs and scope != "full_project")
 
         # Complex: large projects, deep audits, full system design
         is_level_3 = (scope == "full_project") or \
@@ -90,9 +90,11 @@ class TaskComplexityAnalyzer:
 
         # Moderate: structured development (e.g. APIs, persistence layer, multi-module script)
         is_level_2 = (not is_level_0 and not is_level_3) and (
-            len(functional_needs) >= 1 or
-            len(deliverables) >= 2 or
-            any(k in text_lower for k in ["api", "concois", "conçois", "build"])
+            scope != "single_function" and (
+                len(functional_needs) >= 1 or
+                len(deliverables) >= 2 or
+                any(k in text_lower for k in ["api", "concois", "conçois", "build"])
+            )
         )
 
         # Simple: basic code, simple script, single function, or explanation of code
@@ -107,27 +109,11 @@ class TaskComplexityAnalyzer:
         else:
             complexity = "complex"
 
-        # Set requires_agents and recommended_agents based purely on NEUTRAL task attributes,
-        # without hardcoding technology-based triggers (like sqlite triggers tester).
-        requires_agents = (complexity != "trivial")
-        recommended_agents = []
-
-        if complexity == "simple":
-            recommended_agents = ["programmer"]
-        elif complexity == "moderate":
-            # For moderate development, suggest architecture & code
-            recommended_agents = ["architect", "programmer"]
-        elif complexity == "complex":
-            # For complex tasks, the baseline involves design & implementation
-            recommended_agents = ["architect", "programmer"]
-
         return TaskProfile(
             intent=intent,
             domain=domain,
             complexity=complexity,
             risk=risk,
-            requires_agents=requires_agents,
-            recommended_agents=recommended_agents,
             deliverables=deliverables,
             scope=scope,
             functional_needs=functional_needs
