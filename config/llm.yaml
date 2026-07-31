@@ -1,30 +1,44 @@
 # Hikmara AI - Local Language Model (LLM) Configuration
 
-active_engine: "ollama"
-active_model: "qwen2.5:3b"
-fallback_model: "llama3:8b"
+# Core Local Execution Engine (GGUF is primary local core, Ollama is secondary)
+active_engine: "gguf"
+active_model: "qwen-model.gguf"
+fallback_engine: "ollama"
+fallback_model: "qwen2.5:3b"
 
+# GGUF Model Folder configuration
+gguf_model_path: "ai_models/models/general/qwen-model.gguf"
+gguf_coding_path: "ai_models/models/coding/coder-model.gguf"
+gguf_reasoning_path: "ai_models/models/reasoning/reasoning-model.gguf"
+
+# Inference Parameters
 temperature: 0.7
 top_p: 0.9
 top_k: 40
 seed: 42
 
+# CPU Execution configuration (optimized for 4 Xeon cores)
 context_size: 2048
 max_tokens: 512
+cpu_threads: 4
+gpu: false
+
+# Timeouts & Connection Settings
 timeout_seconds: 30.0
 keep_alive: "5m"
 streaming: true
-gpu: false
-cpu_threads: 4
 
 stop_tokens:
   - "<|im_end|>"
   - "User:"
+  - "Utilisateur:"
+  - "Assistant:"
 repeat_penalty: 1.1
 
 system_prompt: "Vous êtes Hikmara AI, un assistant d'intelligence locale universel, hautement sécurisé et opérationnel 100% hors-ligne."
 prompt_template: "conversation.md"
 history_size: 10
 
+# Embedding models for independent vector store
 embedding_model: "all-minilm-l6-v2"
 reranker_model: "bge-reranker-base"

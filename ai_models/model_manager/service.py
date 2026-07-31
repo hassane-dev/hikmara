@@ -8,8 +8,8 @@ from ai_models.llm.models import LLMResponse
 class ModelManager:
     def __init__(self):
         self.config = self._load_config()
-        self.active_engine_name = self.config.get("active_engine", "ollama")
-        self.active_model_name = self.config.get("active_model", "qwen2.5:3b")
+        self.active_engine_name = self.config.get("active_engine", "gguf") # Default to GGUF local core as requested!
+        self.active_model_name = self.config.get("active_model", "qwen-model.gguf")
 
         # Instantiate active LLM engine
         self._engine = LLMFactory.create_engine(self.active_engine_name, self.active_model_name, self.config)
@@ -64,22 +64,32 @@ class ModelManager:
         return self._engine.load_model()
 
     def select_best_model_for_intent(self, intent: str) -> str:
-        """Selects the most suitable model from the active engine according to capabilities."""
+        """Selects the most suitable model from the active engine according to capabilities and intent."""
+        if self.active_engine_name == "gguf":
+            # Map intents to GGUF model filenames in our multi-model folders
+            intent_lower = str(intent).lower()
+            if any(k in intent_lower for k in ["code", "développement", "developpement", "generation", "modification", "programmation", "software"]):
+                return "coder-model.gguf"
+            elif any(k in intent_lower for k in ["complex", "requêtes complexes", "planning", "raisonnement", "reasoning", "sécurité", "security"]):
+                return "reasoning-model.gguf"
+            else:
+                return "qwen-model.gguf"
+
+        # If other engine (e.g. Ollama)
         available = global_model_registry.list_by_engine(self.active_engine_name)
         if not available:
             return self.active_model_name
 
-        # For coding intents
-        if intent in ["Génération de code", "Développement logiciel", "code_generation", "code_modification"]:
+        intent_lower = str(intent).lower()
+        if any(k in intent_lower for k in ["code", "développement", "developpement", "generation", "modification", "programmation"]):
             code_mods = [m.id for m in available if "coder" in m.id or "deepseek" in m.id]
             if code_mods:
                 return code_mods[0]
 
-        # For conversation or greeting
-        if intent in ["Salutations", "Conversation générale", "greeting", "general_conversation"]:
-            small_mods = [m.id for m in available if m.ram_estimated_gb <= 4.0]
-            if small_mods:
-                return small_mods[0]
+        if any(k in intent_lower for k in ["complex", "planning", "reasoning"]):
+            reason_mods = [m.id for m in available if "llama3" in m.id or "mistral" in m.id or "8b" in m.id]
+            if reason_mods:
+                return reason_mods[0]
 
         return self.active_model_name
 

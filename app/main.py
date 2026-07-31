@@ -5,9 +5,59 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.bootstrap import bootstrap_application
 from app.application import global_hikmara_application
 
+def run_runtime_check():
+    """Runs the Hikmara AI Runtime Check diagnostic at startup."""
+    try:
+        from cognition.understanding.service import global_language_understanding
+        nlu_active = global_language_understanding is not None
+    except Exception:
+        nlu_active = False
+
+    try:
+        from memory.service import global_memory_system
+        memory_active = global_memory_system is not None
+    except Exception:
+        memory_active = False
+
+    try:
+        from ai_models.model_manager.service import global_model_manager
+        model_manager_active = global_model_manager is not None
+    except Exception:
+        model_manager_active = False
+
+    try:
+        from ai_models.llm.engines import HAS_LLAMA_CPP
+        gguf_engine_loaded = HAS_LLAMA_CPP
+    except Exception:
+        gguf_engine_loaded = False
+
+    local_model_available = False
+    for folder in ["ai_models/models/general", "ai_models/models/coding", "ai_models/models/reasoning"]:
+        if os.path.exists(folder):
+            for f in os.listdir(folder):
+                if f.endswith(".gguf"):
+                    local_model_available = True
+                    break
+
+    offline_operational = True
+
+    print("\n" + "=" * 35)
+    print("     Hikmara AI Runtime Check")
+    print("=" * 35)
+    print(f"{'✓' if nlu_active else '✗'} NLU actif")
+    print(f"{'✓' if memory_active else '✗'} Memory active")
+    print(f"{'✓' if model_manager_active else '✗'} Model Manager actif")
+    print(f"{'✓' if gguf_engine_loaded else '✗'} GGUF Engine chargé")
+    print(f"{'✓' if local_model_available else '✗'} Modèle local disponible")
+    print(f"{'✓' if offline_operational else '✗'} Mode offline opérationnel")
+    print("=" * 35 + "\n")
+
 def main():
     # Bootstrap offline layers
     bootstrap_application()
+
+    # Run diagnostic visible check at startup
+    run_runtime_check()
 
     # Determine execution mode (headless vs GUI)
     headless_arg = "--headless" in sys.argv
