@@ -11,7 +11,45 @@ class ModelRegistry:
         self._models[specs.id] = specs
 
     def _register_default_models(self):
-        # Register standard offline models
+        # Register GGUF local models first
+        self.register_model(ModelSpecs(
+            id="qwen-model.gguf",
+            name="Qwen 2.5 3B (GGUF)",
+            family="Qwen",
+            engine="gguf",
+            size_gb=2.0,
+            parameters="3B",
+            max_context=4096,
+            streaming=True,
+            ram_estimated_gb=4.0,
+            precision="q4_K_M"
+        ))
+        self.register_model(ModelSpecs(
+            id="coder-model.gguf",
+            name="Qwen Coder 1.5B (GGUF)",
+            family="Qwen",
+            engine="gguf",
+            size_gb=1.2,
+            parameters="1.5B",
+            max_context=4096,
+            streaming=True,
+            ram_estimated_gb=3.0,
+            precision="q4_K_M"
+        ))
+        self.register_model(ModelSpecs(
+            id="reasoning-model.gguf",
+            name="DeepSeek R1 Distill 1.5B (GGUF)",
+            family="DeepSeek",
+            engine="gguf",
+            size_gb=1.2,
+            parameters="1.5B",
+            max_context=4096,
+            streaming=True,
+            ram_estimated_gb=3.0,
+            precision="q4_K_M"
+        ))
+
+        # Register standard offline Ollama models
         self.register_model(ModelSpecs(
             id="qwen2.5:3b",
             name="Qwen 2.5 3B",
@@ -96,7 +134,8 @@ class ModelRegistry:
             ram_estimated_gb=3.0,
             precision="q4_K_M"
         ))
-        # GGUF Engine
+
+        # GGUF Engine Legacy
         self.register_model(ModelSpecs(
             id="llama3-8b-q4_k_m.gguf",
             name="Llama 3 8B (GGUF)",
