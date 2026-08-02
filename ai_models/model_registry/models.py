@@ -21,3 +21,50 @@ class ModelSpecs(BaseModel):
     license: str = Field("unknown", description="Open-source or commercial license")
     installed: bool = Field(True, description="Whether the model is downloaded/installed locally")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Custom metadata attributes")
+
+    # Phase 5.1 properties & compatibility fields
+    @property
+    def model_id(self) -> str:
+        return self.id
+
+    @property
+    def model_version(self) -> str:
+        return self.metadata.get("model_version", "1.0.0")
+
+    @property
+    def architecture_version(self) -> str:
+        return self.metadata.get("architecture_version", "1.0.0")
+
+    @property
+    def model_hash(self) -> str:
+        return self.metadata.get("model_hash", f"hash_{self.id}_mock")
+
+    @property
+    def tokenizer_hash(self) -> str:
+        return self.metadata.get("tokenizer_hash", f"tokenizer_{self.id}_mock")
+
+    @property
+    def engine_type(self) -> str:
+        return self.engine
+
+    @property
+    def modality(self) -> str:
+        if self.vision:
+            return "vision"
+        if self.audio:
+            return "audio"
+        if self.embeddings:
+            return "embedding"
+        return "text"
+
+    @property
+    def file_size(self) -> float:
+        return self.size_gb
+
+    @property
+    def required_memory(self) -> float:
+        return self.ram_estimated_gb
+
+    @property
+    def supported_context_window(self) -> int:
+        return self.max_context

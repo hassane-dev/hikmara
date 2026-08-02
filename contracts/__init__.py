@@ -1,0 +1,1 @@
+# Hikmara AI contracts package
