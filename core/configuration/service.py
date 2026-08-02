@@ -10,7 +10,8 @@ class ConfigurationManager:
     def load_all(self):
         if not os.path.exists(self.config_dir):
             os.makedirs(self.config_dir)
-        for name in ["system", "models", "security", "hardware", "user"]:
+        # Include llm in the configurations
+        for name in ["system", "models", "security", "hardware", "user", "llm"]:
             path = os.path.join(self.config_dir, f"{name}.yaml")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
@@ -36,7 +37,10 @@ class ConfigurationManager:
             yaml.safe_dump(self.configs[section], f)
 
 _config_manager = ConfigurationManager()
+global_config_manager = _config_manager
+
 def get_config(section, key=None, default=None):
     return _config_manager.get(section, key, default)
+
 def set_config(section, key, value):
     _config_manager.set(section, key, value)
