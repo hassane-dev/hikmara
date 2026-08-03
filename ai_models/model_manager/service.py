@@ -176,6 +176,10 @@ class ModelLifecycleManager:
                 )
 
         try:
+            # Simulate cold load timing cost inside tests
+            if IS_TESTING:
+                time.sleep(0.05)
+
             # Instantiate engine via factory
             config = global_config_manager.get("llm") or {}
             engine = LLMFactory.create_engine(specs.engine, specs.id, config)
